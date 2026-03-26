@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fffdf7;
+  --foreground: #0f172a;
+  --muted: #5b6472;
+  --panel: rgba(255, 255, 255, 0.8);
+  --panel-strong: rgba(255, 255, 255, 0.92);
+  --border: rgba(15, 23, 42, 0.08);
+  --brand: #ff7a18;
+  --brand-2: #00a6fb;
+  --brand-3: #0f766e;
+  --danger: #e11d48;
+  --glow: radial-gradient(circle at top left, rgba(255, 122, 24, 0.24), transparent 28%),
+    radial-gradient(circle at top right, rgba(0, 166, 251, 0.18), transparent 24%),
+    linear-gradient(135deg, #fffdf7 0%, #fef2d6 45%, #eef8ff 100%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-plex-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--glow);
+  color: var(--foreground);
+  font-family: var(--font-space-grotesk), sans-serif;
+}
+
+::selection {
+  background: rgba(255, 122, 24, 0.22);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+}
+
+.glass-panel-strong {
+  background: var(--panel-strong);
+}
+
+.animated-orb {
+  animation: drift 12s ease-in-out infinite;
+}
+
+.fade-up {
+  animation: fade-up 0.45s ease-out;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0) scale(1.04);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
