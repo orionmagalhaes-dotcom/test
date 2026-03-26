@@ -94,3 +94,29 @@ body {
     transform: translate3d(0, 0, 0);
   }
 }
+
+@keyframes bear-dance {
+  0%, 100% { transform: rotate(-8deg) translateY(0px) scale(1); }
+  20%       { transform: rotate(8deg)  translateY(-12px) scale(1.05); }
+  40%       { transform: rotate(-6deg) translateY(-4px) scale(1); }
+  60%       { transform: rotate(6deg)  translateY(-16px) scale(1.06); }
+  80%       { transform: rotate(-4deg) translateY(-6px) scale(1.02); }
+}
+
+.bear-animate {
+  animation: bear-dance 1.4s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(120%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(120%); }
+}
+
+.toast-enter { animation: toast-in 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.toast-exit  { animation: toast-out 0.25s ease-in forwards; }

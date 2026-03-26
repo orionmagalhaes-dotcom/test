@@ -174,6 +174,7 @@ export function AppShell() {
   const [webhookMsg, setWebhookMsg] = useState("");
   const [webhookBusy, setWebhookBusy] = useState(false);
   const [webhookResult, setWebhookResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [toasts, setToasts] = useState<{ id: string; title: string; body: string; exiting?: boolean }[]>([]);
   const [authForm, setAuthForm] = useState({
     identifier: "",
     email: "",
@@ -449,9 +450,12 @@ export function AppShell() {
           added.forEach((m) => {
             if (m.receiver_id === currentUserId) {
               playNotifSound();
+              const sender = directory.find((u) => u.id === m.sender_id);
+              const senderName = sender?.full_name || sender?.username || "Alguém";
+              pushToast(`Nova mensagem de ${senderName}`, m.content || "Enviou um anexo.");
               if (typeof document !== "undefined" && document.visibilityState === "hidden") {
                 if ("Notification" in window && Notification.permission === "granted") {
-                  new Notification("Nova mensagem", { body: m.content || "Enviou um anexo." });
+                  new Notification(`Nova mensagem de ${senderName}`, { body: m.content || "Enviou um anexo." });
                 }
               }
             }
@@ -848,6 +852,16 @@ export function AppShell() {
     setSession(null);
   }
 
+  // ─── Toast helper ───────────────────────────────────────────────────────────
+  const pushToast = useEvent((title: string, body: string) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev.slice(-4), { id, title, body }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.map((t) => t.id === id ? { ...t, exiting: true } : t));
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 300);
+    }, 4000);
+  });
+
   if (!configured) {
     return (
       <main className="flex min-h-screen items-center justify-center px-4 py-10">
@@ -867,163 +881,140 @@ export function AppShell() {
 
   if (!session) {
     return (
-      <main className="relative min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-8">
+      <main className="relative min-h-screen overflow-hidden" style={{ background: "linear-gradient(135deg, #fff7ed 0%, #fef3c7 40%, #ecfeff 100%)" }}>
+        {/* Background orbs */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="animated-orb absolute left-8 top-10 h-52 w-52 rounded-full bg-orange-300/30 blur-3xl" />
-          <div className="animated-orb absolute bottom-12 right-10 h-60 w-60 rounded-full bg-cyan-300/25 blur-3xl" />
+          <div className="animated-orb absolute left-[-5%] top-[-5%] h-[500px] w-[500px] rounded-full bg-orange-300/20 blur-3xl" />
+          <div className="animated-orb absolute bottom-[-5%] right-[-5%] h-[500px] w-[500px] rounded-full bg-cyan-300/20 blur-3xl" />
+          <div className="animated-orb absolute left-[40%] top-[30%] h-64 w-64 rounded-full bg-violet-200/20 blur-3xl" />
         </div>
-        <div className="relative mx-auto grid max-w-7xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card className="fade-up flex min-h-[540px] flex-col justify-between gap-8 p-7 sm:p-10">
-            <div className="space-y-6">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/70 px-3 py-1 text-xs font-medium uppercase tracking-[0.24em] text-slate-600">
-                <Sparkles className="h-3.5 w-3.5" />
-                realtime inbox
-              </div>
-              <div>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-950 sm:text-6xl">
-                  {APP_NAME}
-                </h1>
-                <p className="mt-4 max-w-xl text-lg leading-8 text-slate-600">
-                  {APP_TAGLINE}. Chat com anexos, status lida/entregue, presenca
-                  online/offline e painel administrativo com metadados seguros.
-                </p>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-3xl border border-white/80 bg-white/85 p-4">
-                  <p className="text-sm font-medium text-slate-500">Admin</p>
-                  <p className="mt-2 text-sm text-slate-700">`admin / admin123`</p>
-                </div>
-                <div className="rounded-3xl border border-white/80 bg-white/85 p-4">
-                  <p className="text-sm font-medium text-slate-500">Demo</p>
-                  <p className="mt-2 text-sm text-slate-700">{demoUsers.length} usuarios seed</p>
-                </div>
-                <div className="rounded-3xl border border-white/80 bg-white/85 p-4">
-                  <p className="text-sm font-medium text-slate-500">Supabase</p>
-                  <p className="mt-2 text-sm text-slate-700">{bootMessage ?? "Bootstrapando conta admin"}</p>
-                </div>
-              </div>
-            </div>
-          </Card>
 
-          <Card className="fade-up p-7 sm:p-8">
-            <div className="mb-6 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm uppercase tracking-[0.2em] text-slate-500">Acesso</p>
-                <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-                  {authMode === "login" ? "Entrar" : "Criar conta"}
-                </h2>
-              </div>
-              <div className="inline-flex rounded-full bg-slate-950/5 p-1">
+        <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-12">
+          {/* Bear + title hero */}
+          <div className="mb-8 flex flex-col items-center gap-4">
+            <div className="relative">
+              {/* Shadow under bear */}
+              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 h-4 w-24 rounded-full bg-black/10 blur-md" />
+              <Image
+                src="/bear.png"
+                alt="PulseBox mascot bear dancing"
+                width={160}
+                height={160}
+                className="bear-animate drop-shadow-xl select-none"
+                priority
+                unoptimized
+              />
+            </div>
+            <div className="text-center">
+              <h1 className="text-5xl font-black tracking-tight text-slate-900 sm:text-7xl">
+                Pulse<span className="text-orange-500">Box</span>
+              </h1>
+              <p className="mt-3 text-lg text-slate-500 font-medium">Chat em tempo real · Simples · Divertido</p>
+            </div>
+          </div>
+
+          {/* Auth card */}
+          <div className="w-full max-w-md">
+            <div className="rounded-[28px] bg-white/90 backdrop-blur-xl border border-white shadow-2xl shadow-slate-900/10 p-8">
+              {/* Mode switcher */}
+              <div className="mb-6 inline-flex w-full rounded-full bg-slate-100 p-1">
                 {(["login", "register"] as const).map((mode) => (
                   <button
-                    className={cn(
-                      "rounded-full px-4 py-2 text-sm font-medium transition",
-                      authMode === mode
-                        ? "bg-slate-950 text-white"
-                        : "text-slate-600 hover:text-slate-950",
-                    )}
                     key={mode}
+                    className={cn(
+                      "flex-1 rounded-full py-2.5 text-sm font-semibold transition",
+                      authMode === mode ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    )}
                     onClick={() => setAuthMode(mode)}
                     type="button"
                   >
-                    {mode === "login" ? "Login" : "Cadastro"}
+                    {mode === "login" ? "🔑 Entrar" : "✨ Criar conta"}
                   </button>
                 ))}
               </div>
+
+              <form onSubmit={submitAuth} className="space-y-4">
+                {authMode === "login" ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Username ou &quot;admin&quot;</label>
+                      <input
+                        autoComplete="username"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 transition"
+                        placeholder="admin"
+                        value={authForm.identifier}
+                        onChange={(e) => setAuthForm((c) => ({ ...c, identifier: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Senha</label>
+                      <input
+                        autoComplete="current-password"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 transition"
+                        placeholder="••••••••"
+                        type="password"
+                        value={authForm.password}
+                        onChange={(e) => setAuthForm((c) => ({ ...c, password: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Username</label>
+                      <input
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 transition"
+                        placeholder="@seunome"
+                        value={authForm.username}
+                        onChange={(e) => setAuthForm((c) => ({ ...c, username: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Nome completo</label>
+                      <input
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 transition"
+                        placeholder="Seu nome"
+                        value={authForm.fullName}
+                        onChange={(e) => setAuthForm((c) => ({ ...c, fullName: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-1.5">Senha</label>
+                      <input
+                        autoComplete="new-password"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-400/10 transition"
+                        placeholder="••••••••"
+                        type="password"
+                        value={authForm.password}
+                        onChange={(e) => setAuthForm((c) => ({ ...c, password: e.target.value }))}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {feedback && (
+                  <p className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm font-medium text-red-700">{feedback}</p>
+                )}
+
+                <button
+                  className="w-full rounded-2xl bg-gradient-to-r from-orange-500 to-amber-400 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/25 hover:opacity-90 transition disabled:opacity-60 flex items-center justify-center gap-2"
+                  disabled={busyAuth}
+                  type="submit"
+                >
+                  {busyAuth ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  {authMode === "login" ? "Entrar no PulseBox" : "Criar minha conta"}
+                </button>
+              </form>
+
+              <p className="mt-4 text-center text-xs text-slate-400">
+                Admin padrão: <span className="font-mono text-slate-600">admin / admin123</span>
+              </p>
             </div>
-
-            <form className="space-y-4" onSubmit={submitAuth}>
-              {authMode === "login" ? (
-                <label className="block text-sm font-medium text-slate-700">
-                  E-mail ou alias admin
-                  <input
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-cyan-400"
-                    onChange={(event) =>
-                      setAuthForm((current) => ({ ...current, identifier: event.target.value }))
-                    }
-                    placeholder="voce@empresa.com ou admin"
-                    required
-                    value={authForm.identifier}
-                  />
-                </label>
-              ) : (
-                <>
-                  <label className="block text-sm font-medium text-slate-700">
-                    E-mail
-                    <input
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-cyan-400"
-                      onChange={(event) =>
-                        setAuthForm((current) => ({ ...current, email: event.target.value }))
-                      }
-                      required
-                      type="email"
-                      value={authForm.email}
-                    />
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700">
-                    @username
-                    <input
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-cyan-400"
-                      onChange={(event) =>
-                        setAuthForm((current) => ({ ...current, username: event.target.value }))
-                      }
-                      required
-                      value={authForm.username}
-                    />
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700">
-                    Nome
-                    <input
-                      className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-cyan-400"
-                      onChange={(event) =>
-                        setAuthForm((current) => ({ ...current, fullName: event.target.value }))
-                      }
-                      value={authForm.fullName}
-                    />
-                  </label>
-                </>
-              )}
-
-              <label className="block text-sm font-medium text-slate-700">
-                Senha
-                <input
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-cyan-400"
-                  onChange={(event) =>
-                    setAuthForm((current) => ({ ...current, password: event.target.value }))
-                  }
-                  required
-                  type="password"
-                  value={authForm.password}
-                />
-              </label>
-
-              <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <span className="text-sm text-slate-700">Permanecer conectado</span>
-                <input
-                  checked={sessionMode === "local"}
-                  className="h-4 w-4 accent-slate-950"
-                  onChange={(event) => setSessionMode(event.target.checked ? "local" : "session")}
-                  type="checkbox"
-                />
-              </label>
-
-              <button
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
-                disabled={busyAuth}
-                type="submit"
-              >
-                {busyAuth ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                {authMode === "login" ? "Entrar no painel" : "Criar conta"}
-              </button>
-            </form>
-
-            <div className="mt-6 rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-              O alias `admin` faz login com a conta VIP criada automaticamente. Se
-              o Supabase exigir confirmacao, desative o fluxo de e-mail para os
-              testes locais.
-            </div>
-            {feedback ? <p className="mt-4 text-sm text-slate-600">{feedback}</p> : null}
-          </Card>
+          </div>
         </div>
       </main>
     );
@@ -1560,6 +1551,31 @@ export function AppShell() {
           </div>
         )}
       </main>
+
+      {/* ── Toast notification cards ─────────────────────────────────────── */}
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3 pointer-events-none" style={{ maxWidth: 340 }}>
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={cn(
+              "pointer-events-auto flex items-start gap-3 rounded-2xl bg-white border border-slate-200 shadow-xl shadow-slate-900/10 px-4 py-3.5",
+              t.exiting ? "toast-exit" : "toast-enter"
+            )}
+          >
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-500">
+              <Bell className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-800 truncate">{t.title}</p>
+              <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{t.body}</p>
+            </div>
+            <button
+              onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
+              className="shrink-0 text-slate-400 hover:text-slate-700 transition text-xs leading-none mt-0.5"
+            >✕</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
