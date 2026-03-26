@@ -84,3 +84,13 @@ export interface AdminDeliveryLog {
 }
 
 export type Database = any;
+
+export interface FriendRequest {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+  sender?: { username: string; full_name: string | null; avatar_path: string | null };
+  receiver?: { username: string; full_name: string | null; avatar_path: string | null };
+}

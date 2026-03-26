@@ -33,7 +33,9 @@ import {
   Send,
   Shield,
   Sparkles,
+  UserPlus,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -57,6 +59,7 @@ import type {
   AdminUserEngagement,
   AppProfile,
   DirectoryProfile,
+  FriendRequest,
   MessageRecord,
   NotificationRecord,
   SessionMode,
@@ -75,7 +78,7 @@ import {
 } from "@/lib/utils";
 
 type AuthMode = "login" | "register";
-type ActiveSection = "inbox" | "profile" | "admin";
+type ActiveSection = "inbox" | "profile" | "admin" | "friends";
 type AdminTab = "overview" | "users" | "messages" | "webhook";
 
 function Card({
@@ -175,6 +178,14 @@ export function AppShell() {
   const [webhookBusy, setWebhookBusy] = useState(false);
   const [webhookResult, setWebhookResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [toasts, setToasts] = useState<{ id: string; title: string; body: string; exiting?: boolean }[]>([]);
+  // Friends
+  const [friendSearch, setFriendSearch] = useState("");
+  const [friendSearchResults, setFriendSearchResults] = useState<DirectoryProfile[]>([]);
+  const [friendSearchBusy, setFriendSearchBusy] = useState(false);
+  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
+  const [acceptedFriends, setAcceptedFriends] = useState<(FriendRequest & { friend: DirectoryProfile | null })[]>([]);
+  const [friendFeedback, setFriendFeedback] = useState<string | null>(null);
   const [authForm, setAuthForm] = useState({
     identifier: "",
     email: "",
@@ -852,6 +863,49 @@ export function AppShell() {
     setSession(null);
   }
 
+  // ─── Friends helpers ─────────────────────────────────────────────────────────
+  const loadFriends = useEvent(async () => {
+    if (!currentUserId) return;
+    const res = await fetch(`/api/friends?userId=${currentUserId}`);
+    const data = await res.json();
+    setIncomingRequests(data.incoming ?? []);
+    setOutgoingRequests(data.outgoing ?? []);
+    setAcceptedFriends(data.accepted ?? []);
+  });
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    void loadFriends();
+    const id = setInterval(() => void loadFriends(), 5000);
+    return () => clearInterval(id);
+  }, [currentUserId, loadFriends]);
+
+  async function searchFriends(query: string) {
+    setFriendSearch(query);
+    if (query.replace(/^@/, "").trim().length < 2) { setFriendSearchResults([]); return; }
+    setFriendSearchBusy(true);
+    const res = await fetch("/api/friends", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "search", query }) });
+    const data = await res.json();
+    setFriendSearchResults(data.results ?? []);
+    setFriendSearchBusy(false);
+  }
+
+  async function sendFriendRequest(receiverId: string) {
+    setFriendFeedback(null);
+    const res = await fetch("/api/friends", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "send", senderId: currentUserId, receiverId }) });
+    const data = await res.json();
+    setFriendFeedback(data.message || data.error || "Erro.");
+    if (res.ok) { void loadFriends(); setFriendSearchResults([]); setFriendSearch(""); }
+  }
+
+  async function respondFriendRequest(requestId: string, accept: boolean) {
+    setFriendFeedback(null);
+    const res = await fetch("/api/friends", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: accept ? "accept" : "deny", requestId }) });
+    const data = await res.json();
+    setFriendFeedback(data.message || data.error || "Erro.");
+    void loadFriends();
+  }
+
   // ─── Toast helper ───────────────────────────────────────────────────────────
   const pushToast = useEvent((title: string, body: string) => {
     const id = crypto.randomUUID();
@@ -890,26 +944,16 @@ export function AppShell() {
         </div>
 
         <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-12">
-          {/* Bear + title hero */}
-          <div className="mb-8 flex flex-col items-center gap-4">
-            <div className="relative">
-              {/* Shadow under bear */}
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 h-4 w-24 rounded-full bg-black/10 blur-md" />
-              <Image
-                src="/bear.png"
-                alt="PulseBox mascot bear dancing"
-                width={160}
-                height={160}
-                className="bear-animate drop-shadow-xl select-none"
-                priority
-                unoptimized
-              />
+          {/* Logo hero (no bear) */}
+          <div className="mb-10 flex flex-col items-center gap-3">
+            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-orange-500 to-amber-400 shadow-xl shadow-orange-500/30">
+              <MessageCircle className="h-8 w-8 text-white" />
             </div>
             <div className="text-center">
-              <h1 className="text-5xl font-black tracking-tight text-slate-900 sm:text-7xl">
+              <h1 className="text-5xl font-black tracking-tight text-slate-900 sm:text-6xl">
                 Pulse<span className="text-orange-500">Box</span>
               </h1>
-              <p className="mt-3 text-lg text-slate-500 font-medium">Chat em tempo real · Simples · Divertido</p>
+              <p className="mt-2 text-base text-slate-500 font-medium">Chat em tempo real · Simples · Rápido</p>
             </div>
           </div>
 
@@ -1261,6 +1305,10 @@ export function AppShell() {
           <div className="font-semibold text-xl tracking-tight text-slate-800">{APP_NAME}</div>
           <div className="flex items-center gap-1.5">
             <button onClick={() => setActiveSection("inbox")} className={cn("p-2 rounded-full transition", activeSection === "inbox" ? "bg-slate-200 text-slate-900" : "text-slate-500 hover:bg-slate-100")}><MessageCircle className="w-5 h-5"/></button>
+            <button onClick={() => setActiveSection("friends")} className={cn("p-2 rounded-full transition relative", activeSection === "friends" ? "bg-slate-200 text-slate-900" : "text-slate-500 hover:bg-slate-100")}>
+              <UserPlus className="w-5 h-5"/>
+              {incomingRequests.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500 ring-2 ring-white" />}
+            </button>
             <button onClick={() => setActiveSection("profile")} className={cn("p-1 rounded-full transition", activeSection === "profile" ? "ring-2 ring-cyan-500" : "hover:ring-2 hover:ring-slate-300")}><Avatar size={28} label={profile?.username || "U"} src={avatarUrl(profile?.avatar_path)}/></button>
             {profile?.is_admin && <button onClick={() => setActiveSection("admin")} className={cn("p-2 rounded-full transition", activeSection === "admin" ? "bg-slate-200 text-slate-900" : "text-slate-500 hover:bg-slate-100")}><Shield className="w-5 h-5"/></button>}
           </div>
@@ -1343,6 +1391,108 @@ export function AppShell() {
                <button type="button" onClick={signOut} className="text-red-600 flex items-center justify-center gap-2 text-sm font-semibold hover:bg-red-50 p-3 rounded-xl w-full transition border border-transparent hover:border-red-100"><LogOut className="w-4 h-4" /> Sair da conta</button>
             </div>
             {feedback && <p className="text-[13px] font-medium text-center text-slate-600 mt-2 bg-slate-200 py-2 rounded-lg">{feedback}</p>}
+          </div>
+        )}
+
+        {activeSection === "friends" && (
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5 custom-scrollbar">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">Amigos</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Adicione pessoas pelo @username</p>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+              <input
+                className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-10 py-2.5 text-sm outline-none focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 transition shadow-sm"
+                placeholder="@username..."
+                value={friendSearch}
+                onChange={(e) => void searchFriends(e.target.value)}
+              />
+              {friendSearchBusy && <LoaderCircle className="w-4 h-4 absolute right-3.5 top-3 text-slate-400 animate-spin" />}
+              {!friendSearchBusy && friendSearch && <button className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-700" onClick={() => { setFriendSearch(""); setFriendSearchResults([]); }}><X className="w-4 h-4" /></button>}
+            </div>
+
+            {friendFeedback && (
+              <p className="text-sm font-medium px-3 py-2 rounded-xl bg-slate-100 text-slate-700">{friendFeedback}</p>
+            )}
+
+            {/* Search results */}
+            {friendSearchResults.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Resultados</p>
+                {friendSearchResults.map((u) => {
+                  const alreadySent = outgoingRequests.some((r: any) => r.receiver_id === u.id);
+                  const alreadyFriend = acceptedFriends.some((r: any) => r.friend?.id === u.id);
+                  return (
+                    <div key={u.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                      <Avatar label={u.username} src={avatarUrl(u.avatar_path)} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-slate-800 truncate">{u.full_name || u.username}</p>
+                        <p className="text-xs text-slate-400">@{u.username}</p>
+                      </div>
+                      {alreadyFriend ? (
+                        <span className="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-1 rounded-lg">Amigos ✓</span>
+                      ) : alreadySent ? (
+                        <span className="text-xs text-slate-400 font-medium">Enviado</span>
+                      ) : u.id === currentUserId ? null : (
+                        <button onClick={() => void sendFriendRequest(u.id)} className="p-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition shadow-sm shadow-orange-500/20">
+                          <UserPlus className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Incoming requests */}
+            {incomingRequests.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pedidos recebidos ({incomingRequests.length})</p>
+                {incomingRequests.map((req: any) => (
+                  <div key={req.id} className="p-3 rounded-2xl bg-orange-50 border border-orange-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Avatar label={req.sender?.username ?? "?"} src={avatarUrl(req.sender?.avatar_path)} size={34} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-slate-800 truncate">{req.sender?.full_name || req.sender?.username}</p>
+                        <p className="text-xs text-slate-500">@{req.sender?.username}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => void respondFriendRequest(req.id, true)} className="flex-1 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition">Aceitar</button>
+                      <button onClick={() => void respondFriendRequest(req.id, false)} className="flex-1 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 transition">Recusar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Friends list */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amigos ({acceptedFriends.length})</p>
+              {acceptedFriends.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-6">Nenhum amigo ainda.<br/>Pesquise por @username acima!</p>
+              )}
+              {acceptedFriends.map((r: any) => r.friend && (
+                <button
+                  key={r.id}
+                  onClick={() => { setSelectedUserId(r.friend.id); setActiveSection("inbox"); }}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-200 shadow-sm hover:bg-slate-50 transition text-left"
+                >
+                  <div className="relative shrink-0">
+                    <Avatar label={r.friend.username} src={avatarUrl(r.friend.avatar_path)} size={38} />
+                    <div className="absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-white"><Dot online={r.friend.is_online} /></div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-slate-800 truncate">{r.friend.full_name || r.friend.username}</p>
+                    <p className="text-xs text-slate-400">@{r.friend.username}</p>
+                  </div>
+                  <MessageCircle className="w-4 h-4 text-slate-400 shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
