@@ -34,4 +34,3 @@ export default function RootLayout({
     </html>
   );
 }
-// Cache buster for HMR

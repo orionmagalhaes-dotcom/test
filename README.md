@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PulseBox
 
-## Getting Started
+Chat em tempo real com autenticação simples, notificações, sistema de amigos e painel admin.
 
-First, run the development server:
+## Stack
+
+- **Next.js 15** (App Router) — framework
+- **Supabase** — banco de dados PostgreSQL + storage
+- **Tailwind CSS** — estilos
+- **Lucide React** — ícones
+- **date-fns** — formatação de datas
+
+## Configuração
+
+1. Copie `.env.example` → `.env.local` e preencha as variáveis:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Execute o schema completo no [SQL Editor do Supabase](https://supabase.com/dashboard):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+supabase_schema.sql
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Instale as dependências e inicie o servidor:
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Credenciais padrão
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Usuário | Senha    |
+|---------|----------|
+| admin   | admin123 |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Estrutura
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── auth/       # Login, registro, seed admin
+│   │   ├── friends/    # Sistema de amigos (enviar, aceitar, recusar)
+│   │   └── webhook/    # Notificação global para todos os usuários
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+├── components/
+│   ├── app-shell.tsx   # Shell principal da aplicação
+│   └── ui.tsx          # Primitivos reutilizáveis (Avatar, Card, Dot)
+└── lib/
+    ├── constants.ts    # Constantes globais
+    ├── supabase/
+    │   └── client.ts   # Cliente Supabase (browser)
+    ├── types.ts        # Tipos TypeScript compartilhados
+    └── utils.ts        # Funções utilitárias
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Funcionalidades
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Autenticação** — login/registro sem email (armazenado em `profiles.metadata`)
+- **Chat em tempo real** — polling a cada 2s como fallback para Supabase Realtime
+- **Notificações** — painel dropdown no sino, toasts no canto inferior direito, som via Web Audio API
+- **Sistema de amigos** — buscar por @username, enviar/aceitar/recusar pedidos
+- **Painel Admin** — métricas, usuários, log de mensagens, webhook global
+- **Perfil** — edição de nome, avatar, telefone, endereço
+
+## Banco de dados
+
+Tabelas: `profiles`, `messages`, `notifications`, `friend_requests`
+
+RLS desabilitada em todas (projeto de teste). Veja `supabase_schema.sql`.

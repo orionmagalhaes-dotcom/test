@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+
 import {
   startTransition,
   useCallback,
@@ -40,14 +41,11 @@ import {
 } from "lucide-react";
 
 import {
-  ADMIN_BOOTSTRAP_EMAIL,
-  ADMIN_BOOTSTRAP_PASSWORD,
   APP_NAME,
-  APP_TAGLINE,
   AVATAR_BUCKET,
   MESSAGE_BUCKET,
 } from "@/lib/constants";
-import { demoUsers } from "@/lib/demo-users";
+import { Avatar, Card, Dot } from "@/components/ui";
 import {
   getPreferredSessionMode,
   getSupabaseBrowserClient,
@@ -65,82 +63,20 @@ import type {
   SessionMode,
 } from "@/lib/types";
 import {
-  atUsername,
   cn,
   formatChatTime,
   formatRelativeTime,
   formatStatusTime,
-  getInitials,
   humanFileSize,
   isImageMimeType,
   normaliseUsername,
   trimMessage,
 } from "@/lib/utils";
 
+// ─── Local types ───────────────────────────────────────────────────────────
 type AuthMode = "login" | "register";
 type ActiveSection = "inbox" | "profile" | "admin" | "friends";
 type AdminTab = "overview" | "users" | "messages" | "webhook";
-
-function Card({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={cn(
-        "glass-panel glass-panel-strong rounded-[28px] border px-5 py-5 shadow-sm sm:px-6",
-        className,
-      )}
-    >
-      {children}
-    </section>
-  );
-}
-
-function Avatar({
-  label,
-  src,
-  size = 48,
-}: {
-  label: string;
-  src?: string | null;
-  size?: number;
-}) {
-  return (
-    <div
-      className="relative shrink-0 overflow-hidden rounded-2xl border border-white/70 bg-slate-100"
-      style={{ height: size, width: size }}
-    >
-      {src ? (
-        <Image
-          alt={label}
-          className="object-cover"
-          fill
-          sizes={`${size}px`}
-          src={src}
-        />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-400 via-amber-300 to-cyan-300 font-semibold text-slate-900">
-          {getInitials(label)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Dot({ online }: { online: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex h-2.5 w-2.5 rounded-full",
-        online ? "bg-emerald-500" : "bg-slate-300",
-      )}
-    />
-  );
-}
 
 export function AppShell() {
   const configured = isSupabaseConfigured();
@@ -187,6 +123,7 @@ export function AppShell() {
   const [acceptedFriends, setAcceptedFriends] = useState<(FriendRequest & { friend: DirectoryProfile | null })[]>([]);
   const [friendFeedback, setFriendFeedback] = useState<string | null>(null);
   const [friendsSetupRequired, setFriendsSetupRequired] = useState(false);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [authForm, setAuthForm] = useState({
     identifier: "",
     email: "",
@@ -1577,10 +1514,70 @@ alter table public.friend_requests disable row level security;`}</pre>
                  </div>
               </div>
               <div className="flex items-center gap-3">
-                <button className="relative p-2.5 rounded-full hover:bg-slate-100 transition text-slate-500 hover:text-slate-800">
-                  <Bell className="w-5 h-5" />
-                  {unreadNotifications > 0 && <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />}
-                </button>
+                <div className="relative">
+                  <button
+                    className="relative p-2.5 rounded-full hover:bg-slate-100 transition text-slate-500 hover:text-slate-800"
+                    onClick={() => setShowNotifPanel((v) => !v)}
+                  >
+                    <Bell className="w-5 h-5" />
+                    {unreadNotifications > 0 && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">
+                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Notification dropdown */}
+                  {showNotifPanel && (
+                    <>
+                      {/* Backdrop */}
+                      <div className="fixed inset-0 z-30" onClick={() => setShowNotifPanel(false)} />
+                      <div className="absolute right-0 top-full mt-2 z-40 w-80 rounded-2xl bg-white border border-slate-200 shadow-2xl shadow-slate-900/15 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                          <p className="font-bold text-sm text-slate-800">Notificações</p>
+                          {unreadNotifications > 0 && (
+                            <button
+                              onClick={async () => {
+                                if (!supabase || !currentUserId) return;
+                                await supabase.from("notifications").update({ is_read: true, read_at: new Date().toISOString() }).eq("user_id", currentUserId).eq("is_read", false);
+                                void refresh();
+                              }}
+                              className="text-xs text-cyan-600 font-semibold hover:text-cyan-800 transition"
+                            >
+                              Marcar todas como lidas
+                            </button>
+                          )}
+                        </div>
+                        <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                          {notifications.length === 0 ? (
+                            <p className="text-sm text-slate-400 text-center py-10">Nenhuma notificação</p>
+                          ) : (
+                            notifications.slice(0, 20).map((n) => (
+                              <button
+                                key={n.id}
+                                onClick={() => void markNotificationRead(n.id)}
+                                className={cn(
+                                  "w-full text-left flex gap-3 items-start px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition",
+                                  !n.is_read && "bg-orange-50/60"
+                                )}
+                              >
+                                <div className={cn("mt-0.5 shrink-0 flex h-8 w-8 items-center justify-center rounded-full text-sm", !n.is_read ? "bg-orange-100 text-orange-500" : "bg-slate-100 text-slate-400")}>
+                                  {n.type === "friend_request" ? "👥" : n.type === "friend_accepted" ? "🎉" : n.type === "system_alert" ? "📢" : "🔔"}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={cn("text-sm leading-tight", !n.is_read ? "font-semibold text-slate-800" : "text-slate-600")}>{n.title}</p>
+                                  {n.body && <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{n.body}</p>}
+                                  <p className="text-[10px] text-slate-400 mt-1">{formatRelativeTime(n.created_at)}</p>
+                                </div>
+                                {!n.is_read && <div className="mt-2 shrink-0 w-2 h-2 rounded-full bg-orange-500" />}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </header>
 
