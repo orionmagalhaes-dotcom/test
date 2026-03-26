@@ -1,28 +1,18 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Exportando POST para receber webhooks externos
+// Always use service role key so RLS doesn't block the insert
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
+    const { action, content } = payload;
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { error: "Supabase não configurado no servidor" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    // O webhook espera: { "action": "notify_all" | "send_message", "content": "..." }
-    const action = payload.action;
-    const content = payload.content;
-
-    if (!action || !content) {
+    if (!action || !content?.trim()) {
       return NextResponse.json(
         { error: "Payload inválido. Envie 'action' e 'content'." },
         { status: 400 }
@@ -30,41 +20,48 @@ export async function POST(req: Request) {
     }
 
     if (action === "notify_all") {
-      // Cria uma requisição buscando todos os perfis para mandar uma notificação
-      const { data: users, error: userError } = await supabase
+      const { data: users, error: usersError } = await supabase
         .from("profiles")
         .select("id");
 
-      if (userError) throw userError;
+      if (usersError) {
+        console.error("Erro buscando usuários:", usersError);
+        return NextResponse.json({ error: usersError.message }, { status: 500 });
+      }
 
-      const notificationsData = (users || []).map((u) => ({
+      if (!users || users.length === 0) {
+        return NextResponse.json({ message: "Nenhum usuário encontrado." });
+      }
+
+      const notifications = users.map((u) => ({
+        id: crypto.randomUUID(),
         user_id: u.id,
         type: "system_alert",
-        title: "Alerta de Webhook do Sistema",
-        body: content,
+        title: "📢 Mensagem do Sistema",
+        body: content.trim(),
         is_read: false,
       }));
 
       const { error: insertError } = await supabase
         .from("notifications")
-        .insert(notificationsData);
+        .insert(notifications);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error("Erro inserindo notificações:", insertError);
+        return NextResponse.json({ error: insertError.message }, { status: 500 });
+      }
 
       return NextResponse.json({
         success: true,
-        message: `Notificações disparadas para ${notificationsData.length} usuários.`,
+        message: `✅ Notificações enviadas para ${notifications.length} usuário(s).`,
       });
     }
 
+    return NextResponse.json({ error: "Action desconhecida" }, { status: 400 });
+  } catch (err: any) {
+    console.error("Erro no webhook:", err);
     return NextResponse.json(
-      { error: "Action desconhecida" },
-      { status: 400 }
-    );
-  } catch (error: any) {
-    console.error("Erro processando webhook:", error);
-    return NextResponse.json(
-      { error: "Erro interno ao processar o webhook", details: error.message },
+      { error: "Erro interno: " + (err.message ?? "desconhecido") },
       { status: 500 }
     );
   }

@@ -6,7 +6,50 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+const CREATE_TABLE_SQL = `
+  create table if not exists public.friend_requests (
+    id          uuid primary key default gen_random_uuid(),
+    sender_id   uuid not null references public.profiles(id) on delete cascade,
+    receiver_id uuid not null references public.profiles(id) on delete cascade,
+    status      text not null default 'pending'
+                check (status in ('pending', 'accepted', 'rejected')),
+    created_at  timestamptz not null default now(),
+    unique (sender_id, receiver_id)
+  );
+  alter table public.friend_requests disable row level security;
+`;
+
+async function ensureTable() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  // Call the Supabase SQL endpoint available for service-role clients
+  const res = await fetch(`${url}/rest/v1/`, {
+    method: "HEAD",
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  }).catch(() => null);
+
+  // Use pg REST query approach via the pgrst admin endpoint  
+  const pgRes = await fetch(`${url}/pg/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({ query: CREATE_TABLE_SQL }),
+  }).catch(() => null);
+
+  if (!pgRes || !pgRes.ok) {
+    // Fallback: try supabase rpc if a helper function exists
+    try { await sb.rpc("exec_sql", { sql: CREATE_TABLE_SQL }); } catch {}
+  }
+}
+
+let tableEnsured = false;
+
 export async function GET(req: Request) {
+  if (!tableEnsured) { await ensureTable(); tableEnsured = true; }
+
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
@@ -16,6 +59,17 @@ export async function GET(req: Request) {
     sb.from("friend_requests").select("id, receiver_id, status, created_at").eq("sender_id", userId).order("created_at", { ascending: false }),
     sb.from("friend_requests").select("id, sender_id, receiver_id").or(`sender_id.eq.${userId},receiver_id.eq.${userId}`).eq("status", "accepted"),
   ]);
+
+  // If table doesn't exist yet, return empty gracefully
+  if (incomingRes.error?.message?.includes("schema cache") || outgoingRes.error?.message?.includes("schema cache")) {
+    return NextResponse.json({
+      incoming: [], outgoing: [], accepted: [],
+      setupRequired: true,
+      setupSql: CREATE_TABLE_SQL.trim(),
+    });
+  }
+
+
 
   const incoming = incomingRes.data ?? [];
   const senderIds = incoming.map((r: any) => r.sender_id);

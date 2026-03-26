@@ -186,6 +186,7 @@ export function AppShell() {
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
   const [acceptedFriends, setAcceptedFriends] = useState<(FriendRequest & { friend: DirectoryProfile | null })[]>([]);
   const [friendFeedback, setFriendFeedback] = useState<string | null>(null);
+  const [friendsSetupRequired, setFriendsSetupRequired] = useState(false);
   const [authForm, setAuthForm] = useState({
     identifier: "",
     email: "",
@@ -868,6 +869,8 @@ export function AppShell() {
     if (!currentUserId) return;
     const res = await fetch(`/api/friends?userId=${currentUserId}`);
     const data = await res.json();
+    if (data.setupRequired) { setFriendsSetupRequired(true); return; }
+    setFriendsSetupRequired(false);
     setIncomingRequests(data.incoming ?? []);
     setOutgoingRequests(data.outgoing ?? []);
     setAcceptedFriends(data.accepted ?? []);
@@ -1400,6 +1403,23 @@ export function AppShell() {
               <h2 className="text-xl font-bold text-slate-800">Amigos</h2>
               <p className="text-sm text-slate-500 mt-0.5">Adicione pessoas pelo @username</p>
             </div>
+
+            {friendsSetupRequired && (
+              <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm">
+                <p className="font-bold text-amber-800 mb-2">⚠️ Setup necessário</p>
+                <p className="text-amber-700 mb-3">Execute este SQL no <a href="https://supabase.com/dashboard/project/ezvyawynujtdmjwlqniu/sql/new" target="_blank" rel="noreferrer" className="underline font-semibold">Supabase SQL Editor</a>:</p>
+                <pre className="bg-amber-100 text-amber-900 text-[11px] rounded-xl p-3 overflow-x-auto whitespace-pre-wrap leading-relaxed">{`create table if not exists public.friend_requests (
+  id          uuid primary key default gen_random_uuid(),
+  sender_id   uuid not null references public.profiles(id) on delete cascade,
+  receiver_id uuid not null references public.profiles(id) on delete cascade,
+  status      text not null default 'pending'
+              check (status in ('pending','accepted','rejected')),
+  created_at  timestamptz not null default now(),
+  unique (sender_id, receiver_id)
+);
+alter table public.friend_requests disable row level security;`}</pre>
+              </div>
+            )}
 
             {/* Search */}
             <div className="relative">
